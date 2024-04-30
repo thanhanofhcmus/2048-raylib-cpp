@@ -172,6 +172,18 @@ Board push_up(Board const &board) { return rotate_ccw(push_left(rotate_cw(board)
 
 Board push_down(Board const &board) { return rotate_cw(push_left(rotate_ccw(board))); }
 
+bool is_game_over(Board const &board) {
+  std::array fns{push_left, push_right, push_up, push_down};
+
+  for (auto fn : fns) {
+    Board tmp = fn(board);
+    if (board != tmp) {
+      return false;
+    }
+  }
+  return true;
+}
+
 void draw_game_board(Board const &board) {
   constexpr int padding = 2;
   constexpr int font_padding = 5;
@@ -216,9 +228,15 @@ Board update_board(Board const &board) {
 
   Board result = push_fn(board);
   if (result == board) {
+    std::cout << "Cannot move\n";
     return result;
   }
-  result = generate_new_title(result);
+  if (!is_board_full(result)) {
+    result = generate_new_title(result);
+  }
+  if (is_game_over(result)) {
+    std::cout << "Game Over\n";
+  }
 
   return result;
 }
@@ -226,12 +244,7 @@ Board update_board(Board const &board) {
 int main() {
   SetRandomSeed(124);
 
-  Board board{};
-  board[1][3] = 4;
-  board[2][2] = 2;
-  board[3][2] = 8;
-
-  // generate_new_title(board);
+  Board board = generate_new_title(Board{});
 
   InitWindow(SCR_WIDTH, SCR_HEIGHT, "2048");
 
