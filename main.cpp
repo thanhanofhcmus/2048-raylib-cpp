@@ -59,12 +59,26 @@ void print_board(Board const &b) {
   std::cout << '\n';
 }
 
+Board generate_new_title(Board const &board) {
+  Board result{board};
+  int len = static_cast<int>(board.size());
+  int x = GetRandomValue(0, len - 1);
+  int y = GetRandomValue(0, len - 1);
+  while (board[x][y] != 0) {
+    x = GetRandomValue(0, len - 1);
+    y = GetRandomValue(0, len - 1);
+  }
+  result[x][y] = 2;
+  return result;
+}
+
 Row merge_row_left(Row const &input) {
   Row row{input};
-  size_t left_index = -1;
+  int left_index = -1;
+  int len = static_cast<int>(row.size());
 
   // merge
-  for (size_t i = 0; i < row.size(); ++i) {
+  for (int i = 0; i < len; ++i) {
     Value v = row[i];
     if (v == 0) {
       continue;
@@ -80,7 +94,7 @@ Row merge_row_left(Row const &input) {
 
   // push non-zero to left
   left_index = 0;
-  for (size_t i = 0; i < row.size(); ++i) {
+  for (int i = 0; i < len; ++i) {
     Value v = row[i];
     if (v == 0) {
       continue;
@@ -91,14 +105,12 @@ Row merge_row_left(Row const &input) {
     }
     left_index++;
   }
-  // std::cout << "MR\n" << input << '\n' << row << '\n' << '\n';
   return row;
 }
 
 Row reverse_row(Row const &row) {
   Row r{};
   std::reverse_copy(row.begin(), row.end(), r.begin());
-  // std::cout << "RV\n" << row << '\n' << r << '\n' << '\n';
   return r;
 }
 
@@ -182,7 +194,6 @@ void draw_game_board(Board const &board) {
 }
 
 Board update_board(Board const &board) {
-  Board result{board};
   PushFn push_fn = nullptr;
 
   int c = GetCharPressed();
@@ -200,10 +211,14 @@ Board update_board(Board const &board) {
   }
 
   if (push_fn == nullptr) {
-    return result;
+    return board;
   }
 
-  result = push_fn(board);
+  Board result = push_fn(board);
+  if (result == board) {
+    return result;
+  }
+  result = generate_new_title(result);
 
   return result;
 }
