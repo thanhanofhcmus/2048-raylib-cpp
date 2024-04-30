@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <numeric>
@@ -70,6 +71,12 @@ Board generate_new_title(Board const &board) {
   }
   result[x][y] = 2;
   return result;
+}
+
+Value calculate_score(Board const &b) {
+  return std::transform_reduce(
+      b.begin(), b.end(), Value{0}, std::plus<>(),
+      [](Row const &r) -> Value { return std::reduce(r.begin(), r.end()); });
 }
 
 Row merge_row_left(Row const &input) {
@@ -189,6 +196,10 @@ void draw_game_board(Board const &board) {
   constexpr int font_padding = 5;
   char text[100]{};
 
+  const Value score = calculate_score(board);
+  snprintf(text, sizeof(text), "Score: %lld", score);
+  DrawText(text, GAME_PADDING, GAME_HEIGHT + GAME_PADDING, FONT_SIZE, WHITE);
+
   for (size_t i = 0; i < board.size(); ++i) {
     for (size_t j = 0; j < board[i].size(); ++j) {
       const int top_left_x = j * (BLOCK_WIDTH + padding);
@@ -251,8 +262,6 @@ int main() {
   SetExitKey(KEY_Q);
 
   while (!WindowShouldClose()) {
-    // PollInputEvents();
-
     board = update_board(board);
 
     BeginDrawing();
