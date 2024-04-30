@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -5,6 +6,8 @@
 #include <format>
 #include <iostream>
 #include <iterator>
+#include <numeric>
+#include <type_traits>
 
 #include "raylib.h"
 
@@ -38,38 +41,180 @@ static constexpr std::array BLOCK_COLORS{
 };
 
 using Value = std::uint64_t;
-using Board = std::array<std::array<Value, BOARD_SIZE>, BOARD_SIZE>;
-using PushFn = void (*)(Value board[BOARD_SIZE][BOARD_SIZE]);
+using Row = std::array<Value, BOARD_SIZE>;
+using Board = std::array<Row, BOARD_SIZE>;
+using PushFn = Board (*)(Board const &);
+
+std::ostream &operator<<(std::ostream &o, Row const &r) {
+  for (auto v : r) {
+    o << v << ' ';
+  }
+  return o;
+}
+
+void print_board(Board const &b) {
+  for (auto const &r : b) {
+    std::cout << r << '\n';
+  }
+  std::cout << '\n';
+}
+
+Row merge_row_left(Row const &input) {
+  Row row{input};
+  size_t left_index = -1;
+
+  // merge
+  for (size_t i = 0; i < row.size(); ++i) {
+    Value v = row[i];
+    if (v == 0) {
+      continue;
+    }
+    if (left_index >= 0 && v == row[left_index]) {
+      row[left_index] *= 2;
+      row[i] = 0;
+      left_index = -1;
+    } else {
+      left_index = i;
+    }
+  }
+
+  // push non-zero to left
+  left_index = 0;
+  for (size_t i = 0; i < row.size(); ++i) {
+    Value v = row[i];
+    if (v == 0) {
+      continue;
+    }
+    if (left_index != i) {
+      row[left_index] = v;
+      row[i] = 0;
+    }
+    left_index++;
+  }
+  // std::cout << "MR\n" << input << '\n' << row << '\n' << '\n';
+  return row;
+}
+
+Row reverse_row(Row const &row) {
+  Row r{};
+  std::reverse_copy(row.begin(), row.end(), r.begin());
+  // std::cout << "RV\n" << row << '\n' << r << '\n' << '\n';
+  return r;
+}
+
+bool is_board_full(Board const &board) {
+  for (auto const &r : board) {
+    for (auto const &v : r) {
+      if (v == 0) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+Board transpose(Board const &board) {
+  Board result{};
+  for (size_t i = 0; i < board.size(); ++i) {
+    for (size_t j = 0; j < board[i].size(); ++j) {
+      result[i][j] = board[j][i];
+    }
+  }
+  return result;
+}
+
+Board rotate_cw(Board const &board) {
+  Board result = transpose(board);
+  // reverse column
+  std::transform(result.begin(), result.end(), result.begin(), reverse_row);
+  return result;
+}
+
+Board rotate_ccw(Board const &board) {
+  Board result = transpose(board);
+  // reverse row
+  std::reverse(result.begin(), result.end());
+  return result;
+}
+
+Board push_left(Board const &board) {
+  Board result{board};
+  std::transform(result.begin(), result.end(), result.begin(), merge_row_left);
+  return result;
+}
+
+Board push_right(Board const &board) {
+  auto fn = [](Row const &r) {
+    auto x = reverse_row(r);
+    x = merge_row_left(x);
+    x = reverse_row(x);
+    return x;
+  };
+  Board result{board};
+  std::transform(result.begin(), result.end(), result.begin(), fn);
+
+  return result;
+}
+
+Board push_up(Board const &board) { return rotate_ccw(push_left(rotate_cw(board))); }
+
+Board push_down(Board const &board) { return rotate_cw(push_left(rotate_ccw(board))); }
 
 void draw_game_board(Board const &board) {
   constexpr int padding = 2;
   constexpr int font_padding = 5;
+  char text[100]{};
 
   for (size_t i = 0; i < board.size(); ++i) {
-    for (size_t j = 0; j < board[0].size(); ++j) {
+    for (size_t j = 0; j < board[i].size(); ++j) {
       const int top_left_x = j * (BLOCK_WIDTH + padding);
       const int top_left_y = i * (BLOCK_WIDTH + padding);
       const Value value = board[i][j];
-
       const int color_idx = value == 0 ? 0 : std::countr_zero(value);
 
-      DrawRectangle(top_left_x, top_left_y, BLOCK_WIDTH, BLOCK_WIDTH,
-                    BLOCK_COLORS[color_idx]);
-
+      DrawRectangle(top_left_x, top_left_y, BLOCK_WIDTH, BLOCK_WIDTH, BLOCK_COLORS[color_idx]);
       if (value != 0) {
-        auto text = std::format("{}", value);
-        DrawText(text.c_str(), top_left_x + font_padding,
-                 top_left_y + font_padding, FONT_SIZE, WHITE);
+        std::snprintf(text, sizeof(text), "%llu", value);
+        DrawText(text, top_left_x + font_padding, top_left_y + font_padding, FONT_SIZE, WHITE);
       }
     }
   }
+}
+
+Board update_board(Board const &board) {
+  Board result{board};
+  PushFn push_fn = nullptr;
+
+  int c = GetCharPressed();
+  if (c == 'a') {
+    push_fn = push_left;
+  }
+  if (c == 'd') {
+    push_fn = push_right;
+  }
+  if (c == 's') {
+    push_fn = push_up;
+  }
+  if (c == 'w') {
+    push_fn = push_down;
+  }
+
+  if (push_fn == nullptr) {
+    return result;
+  }
+
+  result = push_fn(board);
+
+  return result;
 }
 
 int main() {
   SetRandomSeed(124);
 
   Board board{};
-  board[1][1] = 4;
+  board[1][3] = 4;
+  board[2][2] = 2;
+  board[3][2] = 8;
 
   // generate_new_title(board);
 
@@ -80,7 +225,7 @@ int main() {
   while (!WindowShouldClose()) {
     // PollInputEvents();
 
-    // update_board(board);
+    board = update_board(board);
 
     BeginDrawing();
     ClearBackground(GRAY);
